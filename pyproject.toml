@@ -1,0 +1,3 @@
+dependencies = [
+    "mini-swe-agent"
+]
