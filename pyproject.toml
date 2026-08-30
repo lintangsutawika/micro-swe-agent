@@ -1,3 +1,32 @@
+[project]
+name = "micro-swe-agent"
+version = "0.1.0"
+description = "A stripped-down, self-contained agent scaffold, focused on editable scaffolding."
+requires-python = ">=3.11"
 dependencies = [
-    "mini-swe-agent"
+    "litellm",
+    "jinja2",
+    "pydantic",
+    "tenacity",
+    "pyyaml",
 ]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+# Exposes the `mini-swe-agent` binary the harbor adapter invokes (SAME name on purpose:
+# harbor runs `mini-swe-agent --yolo --model=... --task=... --output=...`). Installing
+# micro thus shadows the PyPI mini CLI with micro's scaffold. See src/micro_swe/__main__.py.
+[project.scripts]
+mini-swe-agent = "micro_swe.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/micro_swe"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "."]
+testpaths = ["tests"]

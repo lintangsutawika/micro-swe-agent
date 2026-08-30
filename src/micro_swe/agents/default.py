@@ -11,13 +11,14 @@ from pathlib import Path
 from jinja2 import StrictUndefined, Template
 from pydantic import BaseModel
 
-from minisweagent import Environment, Model, __version__
-from minisweagent.exceptions import FormatError, InterruptAgentFlow, LimitsExceeded, TimeExceeded
-from minisweagent.utils.serialize import recursive_merge
+from micro_swe import __version__
+from micro_swe.protocols import Environment, Model
+from micro_swe.exceptions import FormatError, InterruptAgentFlow, LimitsExceeded, TimeExceeded
+from micro_swe.utils.serialize import recursive_merge
 
 
 class AgentConfig(BaseModel):
-    """Check the config files in minisweagent/config for example settings."""
+    """Check config/mini.yaml for example settings."""
 
     system_template: str
     """Template for the system message (the first message)."""
@@ -35,7 +36,7 @@ class AgentConfig(BaseModel):
     """Save the trajectory to this path."""
 
 
-class DefaultAgent:
+class Agent:
     def __init__(self, model: Model, env: Environment, *, config_class: type = AgentConfig, **kwargs):
         """See the `AgentConfig` class for permitted keyword arguments."""
         self.config = config_class(**kwargs)
