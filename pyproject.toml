@@ -14,9 +14,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest"]
 
-# Exposes the `mini-swe-agent` binary the harbor adapter invokes (SAME name on purpose:
-# harbor runs `mini-swe-agent --yolo --model=... --task=... --output=...`). Installing
-# micro thus shadows the PyPI mini CLI with micro's scaffold. See src/micro_swe/__main__.py.
+# Exposes the `mini-swe-agent` binary a runner invokes (SAME name on purpose: a runner
+# shells out to `mini-swe-agent --yolo --model=... --task=... --output=...`). Installing
+# this thus shadows the PyPI mini CLI with this scaffold. See src/micro_swe/__main__.py.
 [project.scripts]
 mini-swe-agent = "micro_swe.__main__:main"
 

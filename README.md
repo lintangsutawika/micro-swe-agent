@@ -5,7 +5,7 @@ plan/act/observe loop over a litellm `Model` and a bash `Environment`, so the
 **scaffolding** (loop, prompts, tools) is the part you edit.
 
 It ships the `mini-swe-agent` console entrypoint, making it a drop-in replacement for
-mini-swe-agent anywhere that shells out to that binary (e.g. harbor / Terminal-Bench 2).
+mini-swe-agent anywhere a runner shells out to that binary.
 
 ## Layout
 
@@ -34,7 +34,7 @@ mini-swe-agent \
 
 The model endpoint is resolved by litellm from the environment (e.g.
 `LITELLM_PROXY_API_BASE`/`_KEY`). Unknown flags (`--yolo`, `--exit-immediately`) are
-tolerated, so harbor's command line works unchanged.
+tolerated, so a runner's command line works unchanged.
 
 ## Extend
 

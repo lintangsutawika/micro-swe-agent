@@ -1,21 +1,18 @@
-"""`mini-swe-agent` console entrypoint for micro-swe-agent.
+"""`mini-swe-agent` console entrypoint.
 
-harbor's installed mini-swe-agent adapter drives its agent by shelling out to the
-`mini-swe-agent` binary:
+A runner drives the agent by shelling out to the `mini-swe-agent` binary, e.g.:
 
     mini-swe-agent --yolo --model=<m> --task=<t> --output=<traj> \
-        -c mini -c /tmp/mswea-config/custom.yaml -c model.model_kwargs.timeout=<N> ... \
+        -c mini -c /path/to/custom.yaml -c model.model_kwargs.timeout=<N> ... \
         --exit-immediately
 
-micro is a LIBRARY (no CLI of its own), so this shim provides that binary: it parses the
-flag subset harbor uses, resolves the `-c` config specs EXACTLY like mini
-(get_config_from_spec + recursive_merge; bare `mini` -> builtin mini.yaml), builds
-micro's LitellmModel + mini's LocalEnvironment + micro's DefaultAgent, runs the task, and
-writes the trajectory to --output. micro's serialize() already emits the mini trajectory
-shape, so harbor's trajectory->ATIF conversion consumes it unchanged.
+This entrypoint provides that binary: it parses the flag subset a runner uses, resolves
+the `-c` config specs (get_config_from_spec + recursive_merge; bare `mini` -> builtin
+config/mini.yaml), builds the Model + LocalEnvironment + Agent, runs the task, and writes
+the trajectory to --output.
 
-Flags micro doesn't need (--yolo, --exit-immediately, ...) are tolerated and ignored via
-argparse.parse_known_args, so the adapter's exact command line just works.
+Flags this agent doesn't need (--yolo, --exit-immediately, ...) are tolerated and ignored
+via argparse.parse_known_args, so a runner's exact command line just works.
 """
 
 from __future__ import annotations
@@ -50,7 +47,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("-o", "--output", default=None, help="trajectory output path")
     p.add_argument("-c", "--config", action="append", default=[], help="config spec (repeatable)")
     p.add_argument("-l", "--cost-limit", type=float, default=None, help="cost limit (0 disables)")
-    # Parse only what we know; ignore harbor's --yolo / --exit-immediately / etc.
+    # Parse only what we know; ignore a runner's --yolo / --exit-immediately / etc.
     args, _ignored = p.parse_known_args(argv)
 
     cfg = _merge_configs(args.config)
