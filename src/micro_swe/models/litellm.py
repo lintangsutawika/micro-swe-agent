@@ -20,6 +20,59 @@ from micro_swe.utils.retry import retry
 logger = logging.getLogger("litellm_model")
 
 
+def _wants_token_ids() -> bool:
+    """Whether to request per-token IDs/logprobs from the provider (for RL training).
+
+    Enabled by the ``MICRO_RETURN_TOKEN_IDS`` env var, which harbor's AgentHarness sets
+    in every sandbox exec when SkyRL asks for ``collect_rollout_details``. Off by default
+    so ordinary micro-swe-agent use (non-vLLM providers) pays no cost and risks no 400.
+    """
+    return os.environ.get("MICRO_RETURN_TOKEN_IDS", "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _logprob_of(token_data) -> float | None:
+    """Read a logprob from a litellm logprobs-content entry (dict or pydantic object)."""
+    if isinstance(token_data, dict):
+        return token_data.get("logprob")
+    return getattr(token_data, "logprob", None)
+
+
+def _extract_rollout(response) -> dict | None:
+    """Pull per-turn token IDs + logprobs from a vLLM response, via the same access path
+    harbor's own LLM wrapper uses (harbor/llms/lite_llm.py:_extract_token_ids/_logprobs):
+
+      - completion_token_ids: ``response.choices[0].provider_specific_fields["token_ids"]``
+      - prompt_token_ids:     ``response.prompt_token_ids`` (top-level attr, set by vLLM)
+      - logprobs:             ``response.choices[0].logprobs.content[*].logprob``
+
+    Returns None if the provider didn't return token IDs (e.g. ``return_token_ids`` unset).
+    """
+    try:
+        prompt_token_ids = getattr(response, "prompt_token_ids", None)
+        choice = response.choices[0]
+        completion_token_ids = None
+        psf = getattr(choice, "provider_specific_fields", None)
+        if psf:
+            tid = psf.get("token_ids") if isinstance(psf, dict) else getattr(psf, "token_ids", None)
+            if isinstance(tid, list):
+                completion_token_ids = tid
+        logprobs = None
+        lp = getattr(choice, "logprobs", None)
+        content = getattr(lp, "content", None) if lp is not None else None
+        if content:
+            logprobs = [lpv for lpv in (_logprob_of(t) for t in content) if lpv is not None]
+        if completion_token_ids is None and prompt_token_ids is None:
+            return None
+        return {
+            "prompt_token_ids": prompt_token_ids,
+            "completion_token_ids": completion_token_ids,
+            "logprobs": logprobs,
+        }
+    except Exception as e:  # never let rollout capture break a trajectory
+        logger.debug(f"rollout token-id extraction failed: {e}")
+        return None
+
+
 class ModelConfig(BaseModel):
     model_name: str
     """Model name. Highly recommended to include the provider in the model name, e.g., `anthropic/claude-sonnet-4-5-20250929`."""
@@ -54,12 +107,19 @@ class Model:
             litellm.utils.register_model(json.loads(Path(self.config.litellm_model_registry).read_text()))
 
     def _query(self, messages: list[dict[str, str]], **kwargs):
+        call_kwargs = self.config.model_kwargs | kwargs
+        if _wants_token_ids():
+            # Ask vLLM to return token IDs + logprobs for RL training. Deep-merge into any
+            # existing extra_body (e.g. the cache_salt SkyRL injects) rather than clobber it.
+            call_kwargs["logprobs"] = True
+            base_extra_body = call_kwargs.get("extra_body") or {}
+            call_kwargs["extra_body"] = {**base_extra_body, "return_token_ids": True}
         try:
             return litellm.completion(
                 model=self.config.model_name,
                 messages=messages,
                 tools=[BASH_TOOL],
-                **(self.config.model_kwargs | kwargs),
+                **call_kwargs,
             )
         except litellm.exceptions.AuthenticationError as e:
             e.message += " You can permanently set your API key with `mini-extra config set KEY VALUE`."
@@ -95,6 +155,13 @@ class Model:
             **cost_output,
             "timestamp": time.time(),
         }
+        # Capture per-turn token IDs/logprobs for RL training. `response.model_dump()` above
+        # drops vLLM's dynamically-set `prompt_token_ids`/`provider_specific_fields`, so read
+        # them off the live response object here and persist under a stable key.
+        if _wants_token_ids():
+            rollout = _extract_rollout(response)
+            if rollout is not None:
+                message["extra"]["rollout"] = rollout
         return message
 
     def _calculate_cost(self, response) -> dict[str, float]:
