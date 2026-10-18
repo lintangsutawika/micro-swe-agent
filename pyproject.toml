@@ -9,6 +9,7 @@ dependencies = [
     "pydantic",
     "tenacity",
     "pyyaml",
+    "mcp",
 ]
 
 [project.optional-dependencies]
